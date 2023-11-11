@@ -71,6 +71,8 @@ bool b1_hglt = false;
 bool b2_hglt = false;
 bool b3_hglt = false;
 
+bool target_down = true;
+
 RECT but1Rect = { 0,0,0,0 };
 RECT but2Rect = { 0,0,0,0 };
 RECT but3Rect = { 0,0,0,0 };
@@ -112,8 +114,16 @@ ID2D1Bitmap* bmpMidS = nullptr;
 ID2D1Bitmap* bmpSmallS = nullptr;
 ID2D1Bitmap* bmpBag = nullptr;
 ID2D1Bitmap* bmpChain = nullptr;
+ID2D1Bitmap* bmpTarget = nullptr;
 ID2D1Bitmap* bmpHead[76];
 //////////////////////////////////////////////////////////////
+
+head_ptr Head = nullptr;
+std::vector<object_ptr> vChain;
+
+object_ptr Target = nullptr;
+
+/////////////////////////////////////////////////////////////
 
 template <typename COM> void SafeRelease(COM** which_COM)
 {
@@ -147,6 +157,7 @@ void ReleaseCOM()
     SafeRelease(&bmpSmallS);
     SafeRelease(&bmpChain);
     SafeRelease(&bmpPlatform);
+    SafeRelease(&bmpTarget);
     for (int i = 0; i < 76; i++)
         SafeRelease(&bmpHead[i]);
 
@@ -160,6 +171,24 @@ void InitGame()
     score = 0;
     level = 1;
     seconds = 60;
+
+    if (Head)
+    {
+        Head->Release();
+        Head = nullptr;
+    }
+
+    Head = new HEAD(150.0f, (float)(clHeight / 2));
+    vChain.clear();
+
+    if (Target)
+    {
+        Target->Release();
+        Target = nullptr;
+    }
+
+    Target = new OBJECT(static_cast<float>(clWidth - 50), 50.0f, 40.0f, 46.0f);
+
 }
 void ErrExit(int which_error)
 {
@@ -436,7 +465,7 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
                 if (DialogBox(bIns, MAKEINTRESOURCE(IDD_PLAYER), hwnd, &DlgProc) == IDOK)set_name = true;
                 break;
             }
-            if (LOWORD(lParam) >= but2Rect.left && LOWORD(lParam) <= but2Rect.right
+            else if (LOWORD(lParam) >= but2Rect.left && LOWORD(lParam) <= but2Rect.right
                 && HIWORD(lParam) >= but2Rect.top && HIWORD(lParam) <= but2Rect.bottom)
             {
                 if (sound)
@@ -452,8 +481,21 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
                     break;
                 }
             }
-
-
+            else if (LOWORD(lParam) >= but3Rect.left && LOWORD(lParam) <= but3Rect.right
+                && HIWORD(lParam) >= but3Rect.top && HIWORD(lParam) <= but3Rect.bottom)
+            {
+                
+                break;
+            }
+            else
+            {
+                if (Head && Target)
+                {
+                    if (Head->moving)break;
+                    Head->moving = true;
+                    Head->GetLambda(Target->y + 20.0f);
+                }
+            }
             break;
 
 
@@ -730,6 +772,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         log.close();
         ErrExit(eD2D);
     }
+
+    bmpTarget = Load(L".\\res\\img\\target.png", Draw);
+    if (!bmpTarget)
+    {
+        std::wofstream log(L".\\res\\data\\log.err", std::ios::app);
+        log << L"Error creating D2D1 bmpTarget !" << std::endl;
+        log.close();
+        ErrExit(eD2D);
+    }
     
     for (int i = 0; i < 76; i++)
     {
@@ -749,6 +800,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         }
     }
 
+    
     //////////////////////////////////////////////////////////////////////
 
     //MAIN LOOP *******************************************************
@@ -807,6 +859,72 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             Draw->EndDraw();
             continue;
         }
+        ////////////////////////////////////////////////////////////////
+
+        //GAME PLAY ***************************************************
+
+        //CHAIN ***********************************************************
+
+        if (Head)
+        {
+            float chain_distance = Head->x - 140.0f;
+            int need_number = (int)(chain_distance / 10);
+            float ch_lambda = (Head->y + 25.0f - static_cast<float>(clHeight / 2 + 30)) / (Head->x - 140.0f);
+            vChain.clear();
+            vChain.push_back(new OBJECT(130.0f, static_cast<float>(clHeight / 2 + 30), 10.0f, 11.0f));
+
+            for (int i = 0; i < need_number; ++i)
+                vChain.push_back(new OBJECT(vChain.back()->x + 10, vChain.back()->y + 10 * ch_lambda, 10.0f, 11.0f));
+        }
+
+        ////////////////////////////////////////////////////////////////////
+
+        //TARGET ***********************************************
+
+        if (Target)
+        {
+            if (target_down)
+            {
+                if (Target->ey + 1.0f <= (float)(clHeight))
+                {
+                    Target->y += 1.0f;
+                    Target->SetEdges();
+                    
+                }
+                else target_down = false;
+            }
+            else
+            {
+                
+                if (Target->y - 1.0f >= 50.0f)
+                {
+                    Target->y -= 1.0f;
+                    Target->SetEdges();
+                }
+                else target_down = true;
+            }
+        }
+
+        //MOVE HEAD *****************************************************************
+
+        if (Head && Head->moving)
+        {
+            if (!Head->Move())
+            {
+                Head->moving = false;
+                Head->forward = true;
+            }
+
+        }
+
+
+
+
+
+
+
+
+
 
 
         //DRAW THINGS *************************************************
@@ -849,9 +967,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         }
         /////////////////////////////////////////////////////////////////////////
 
-        Draw->DrawBitmap(bmpBase, D2D1::RectF(0.0f, (float)(clHeight / 2), 130.0f, (float)(clHeight / 2 + 61)));
-
-
+        Draw->DrawBitmap(bmpBase, D2D1::RectF(10.0f, (float)(clHeight / 2), 130.0f, (float)(clHeight / 2 + 61)));
+        Draw->DrawBitmap(bmpPlatform, D2D1::RectF(0.0f, (float)(clHeight / 2 + 61), 150.0f, (float)(clHeight / 2 + 150)));
+        if (Head && bmpHead)
+            if(Head->cargo_attached==types::no_type)
+                Draw->DrawBitmap(bmpHead[Head->GetFrame()], D2D1::RectF(Head->x, Head->y, Head->ex, Head->ey));
+            else
+                Draw->DrawBitmap(bmpHead[75], D2D1::RectF(Head->x, Head->y, Head->ex, Head->ey));
+        if (!vChain.empty())
+        {
+            for (int i = 0; i < vChain.size(); ++i)
+                Draw->DrawBitmap(bmpChain, D2D1::RectF(vChain[i]->x, vChain[i]->y, vChain[i]->ex, vChain[i]->ey));
+        }
+        if (Target)
+            Draw->DrawBitmap(bmpTarget, D2D1::RectF(Target->x, Target->y, Target->ex, Target->ey));
 
 
 

@@ -45,8 +45,13 @@ class OBJECT
 
 		void SetEdges()
 		{
-			x += _width;
-			y += _height;
+			ex = x + _width;
+			ey = y + _height;
+		}
+
+		virtual void Release()
+		{
+			delete this;
 		}
 };
 class BENEFIT :public OBJECT
@@ -105,7 +110,9 @@ class BENEFIT :public OBJECT
 			}
 		}
 
-		~BENEFIT() override
+		~BENEFIT() override {}
+
+		virtual void Release()
 		{
 			delete this;
 		}
@@ -114,7 +121,7 @@ class HEAD :public OBJECT
 {
 	private:
 		float lambda = 1.0f;
-		float speed = 10.0f;
+		float speed = 5.0f;
 		int frame = 0;
 		int frame_delay = 5;
 
@@ -190,7 +197,7 @@ class HEAD :public OBJECT
 				else
 				{
 					heavy_delay = max_heavy_delay;
-					if (x - speed >= 50.0f)
+					if (x - speed >= 140.0f)
 					{
 						x -= speed;
 						y += speed * lambda;
@@ -198,19 +205,21 @@ class HEAD :public OBJECT
 					}
 					else
 					{
-						if (y > 270)
+						if (y > 300)
 						{
 							y -= speed;
 							SetEdges();
 						}
-						if (y < 250)
+						if (y < 270)
 						{
 							y += speed;
 							SetEdges();
 						}
-						if (y >= 250 && y <= 270)
+						if (y >= 270 && y <= 300)
 						{
 							moving = false;
+							y = 270.0f;
+							SetEdges();
 							return false; //return in base
 						}
 					}
@@ -219,6 +228,10 @@ class HEAD :public OBJECT
 			return true; //COMMON CASE - MOVING OR IDLE
 		}
 
+		void Release()override
+		{
+			delete this;
+		}
 };
 
 typedef OBJECT* object_ptr;

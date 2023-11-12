@@ -88,6 +88,7 @@ int score = 0;
 int seconds = 0;
 int minutes = 0;
 int max_benefits_for_level = 5;
+int target_points = 0;
 
 /////////////////////////////////////////////////////////
 
@@ -99,6 +100,8 @@ ID2D1SolidColorBrush* BackBrush = nullptr;
 ID2D1SolidColorBrush* TxtBrush = nullptr;
 ID2D1SolidColorBrush* HgltTxtBrush = nullptr;
 ID2D1SolidColorBrush* InactiveTxtBrush = nullptr;
+ID2D1SolidColorBrush* RedTxtBrush = nullptr;
+ID2D1SolidColorBrush* GreenTxtBrush = nullptr;
 
 IDWriteFactory* iWriteFactory = nullptr;
 IDWriteTextFormat* nrmTextFormat = nullptr;
@@ -160,6 +163,10 @@ void ReleaseCOM()
     SafeRelease(&bmpChain);
     SafeRelease(&bmpPlatform);
     SafeRelease(&bmpTarget);
+    SafeRelease(&RedTxtBrush);
+    SafeRelease(&GreenTxtBrush);
+
+
     for (int i = 0; i < 76; i++)
         SafeRelease(&bmpHead[i]);
 
@@ -174,6 +181,8 @@ void InitGame()
     level = 1;
     seconds = 90 - 2 * level;
     max_benefits_for_level = 11 - level;
+    target_points = 50 + 10 * level;
+    
     if (max_benefits_for_level < 6)max_benefits_for_level = 6;
 
     if (Head)
@@ -682,6 +691,24 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         log.close();
         ErrExit(eD2D);
     }
+
+    hr = Draw->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Red), &RedTxtBrush);
+    if (hr != S_OK)
+    {
+        std::wofstream log(L".\\res\\data\\log.err", std::ios::app);
+        log << L"Error creating D2D1 SolidColorBrush !" << std::endl;
+        log.close();
+        ErrExit(eD2D);
+    }
+
+    hr = Draw->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Green), &GreenTxtBrush);
+    if (hr != S_OK)
+    {
+        std::wofstream log(L".\\res\\data\\log.err", std::ios::app);
+        log << L"Error creating D2D1 SolidColorBrush !" << std::endl;
+        log.close();
+        ErrExit(eD2D);
+    }
     ///////////////////////////////////////////////////////////////////////
 
     //WRITE FACTORY AND TEXT **********************************************
@@ -1011,6 +1038,30 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             }
         }
 
+        if (vBenefits.size() < max_benefits_for_level && rand() % 30 == 20)
+        {
+            bool problem = true;
+            while (problem)
+            {
+                float tx = (float)(rand() % 755 + 200);
+                float ty = (float)(rand() % 480 + 50);
+                int ttype = rand() % 7;
+
+                if (vBenefits.empty()) problem = false;
+                else
+                {
+                    for (int i = 0; i < vBenefits.size(); ++i)
+                    {
+                        if (tx >= vBenefits[i]->x && tx <= vBenefits[i]->ex + 40.0f
+                            && ty >= vBenefits[i]->y && ty <= vBenefits[i]->ey)
+                            problem = true;
+                        else problem = false;
+                    }
+                }
+                if(!problem)
+                    vBenefits.push_back(iCreate(static_cast<types>(ttype), tx, ty));
+            }
+        }
 
         //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1146,6 +1197,60 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
             }
         }
+        ///////////////////////////////////////////////////////////////
+
+        wchar_t status[100] = L"резултат: ";
+        wchar_t add[10] = L"\0";
+        wsprintf(add, L"%d", score);
+        wcscat_s(status, add);
+        
+        int text_size = 0;
+        for (int i = 0; i < 100; i++)
+        {
+            if (status[i] != '\0')text_size++;
+            else break;
+        }
+
+        if (nrmTextFormat && RedTxtBrush && GreenTxtBrush)
+        {
+            if (score < target_points)
+                Draw->DrawText(status, text_size, nrmTextFormat, D2D1::RectF(5.0f, 55.0f, 150.0f, 155.0f), RedTxtBrush);
+            else
+                Draw->DrawText(status, text_size, nrmTextFormat, D2D1::RectF(5.0f, 55.0f, 150.0f, 155.0f), GreenTxtBrush);
+        }
+
+        wcscpy_s(status, L"нужни: ");
+        wsprintf(add, L"%d", target_points);
+        wcscat_s(status, add);
+
+        text_size = 0;
+        for (int i = 0; i < 100; i++)
+        {
+            if (status[i] != '\0')text_size++;
+            else break;
+        }
+        if (nrmTextFormat && RedTxtBrush)
+            Draw->DrawText(status, text_size, nrmTextFormat, D2D1::RectF(5.0f, 160.0f, 150.0f, 260.0f), RedTxtBrush);
+
+        if (nrmTextFormat && RedTxtBrush)
+            Draw->DrawText(current_player, name_size, nrmTextFormat, D2D1::RectF(10.0f, 350.0f, 150.0f, 500.0f), RedTxtBrush);
+
+        wsprintf(add, L"%d", minutes);
+        wcscpy_s(status, add);
+        
+        wsprintf(add, L"%d", seconds - minutes * 60);
+        wcscat_s(status, L" : ");
+        if (seconds - minutes * 60 < 10)wcscat_s(status, L"0");
+        wcscat_s(status, add);
+        text_size = 0;
+        for (int i = 0; i < 100; i++)
+        {
+            if (status[i] != '\0')text_size++;
+            else break;
+        }
+
+        if (nrmTextFormat && RedTxtBrush)
+            Draw->DrawText(status, text_size, nrmTextFormat, D2D1::RectF(50.0f, 520.0f, 150.0f, 600.0f), RedTxtBrush);
 
 
         Draw->EndDraw();

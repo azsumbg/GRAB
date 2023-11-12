@@ -87,6 +87,7 @@ int level = 1;
 int score = 0;
 int seconds = 0;
 int minutes = 0;
+int max_benefits_for_level = 5;
 
 /////////////////////////////////////////////////////////
 
@@ -120,6 +121,7 @@ ID2D1Bitmap* bmpHead[76];
 
 head_ptr Head = nullptr;
 std::vector<object_ptr> vChain;
+std::vector<benefit_ptr> vBenefits;
 
 object_ptr Target = nullptr;
 
@@ -170,7 +172,9 @@ void InitGame()
     
     score = 0;
     level = 1;
-    seconds = 60;
+    seconds = 90 - 2 * level;
+    max_benefits_for_level = 11 - level;
+    if (max_benefits_for_level < 6)max_benefits_for_level = 6;
 
     if (Head)
     {
@@ -189,6 +193,44 @@ void InitGame()
 
     Target = new OBJECT(static_cast<float>(clWidth - 50), 50.0f, 40.0f, 46.0f);
 
+    vBenefits.clear();
+
+    for (int i = 0; i <= max_benefits_for_level; ++i)
+    {
+        bool end_init = true;
+
+        while (end_init)
+        {
+            float tx = 0;
+            float ty = 0;
+            int ttype = -1;
+            bool problem = false;
+
+            ttype = rand() % 7;
+
+            tx = (float)(rand() % 755 + 200);
+            ty = (float)(rand() % 480 + 50);
+
+
+            if (!vBenefits.empty())
+            {
+                for (int j = 0; j < vBenefits.size(); j++)
+                {
+                    if (tx >= vBenefits[j]->x && tx <= vBenefits[j]->ex + 40.0f && ty >= vBenefits[j]->y && ty <= vBenefits[j]->ey)
+                    {
+                        problem = true;
+                        break;
+                    }
+                }
+            
+            }
+            if (!problem)
+            {
+                vBenefits.push_back(iCreate(static_cast<types>(ttype), tx, ty));
+                end_init = false;
+            }
+        }
+    }
 }
 void ErrExit(int which_error)
 {
@@ -909,17 +951,68 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         if (Head && Head->moving)
         {
+            if (sound)mciSendString(L"play .\\res\\snd\\chain.wav", NULL, NULL, NULL);
             if (!Head->Move())
             {
                 Head->moving = false;
                 Head->forward = true;
-            }
+                if (Head->cargo_attached != types::no_type)
+                {
+                    switch (Head->cargo_attached)
+                    {
+                        case types::big_gold:
+                            score += 35;
+                            break;
 
+                        case types::big_silver:
+                            score += 25;
+                            break; 
+
+                        case types::mid_gold:
+                            score += 30;
+                            break;
+
+                        case types::mid_silver:
+                            score += 20;
+                            break;
+
+                        case types::sm_gold:
+                            score += 15;
+                            break;
+
+                        case types::sm_silver:
+                            score += 10;
+                            break;
+
+                        case types::bag:
+                            break;
+                    }
+
+                    Head->cargo_attached = types::no_type;
+                    Head->max_heavy_delay = 0;
+                }
+            }
+        }
+
+        if (Head && !vBenefits.empty())
+        {
+            for (std::vector<benefit_ptr>::iterator it = vBenefits.begin(); it < vBenefits.end(); ++it)
+            {
+                if (!(Head->x >= (*it)->ex || Head->ex <= (*it)->x || Head->y >= (*it)->ey || Head->ey <= (*it)->y))
+                {
+                    if (!Head->forward)break;
+                    Head->max_heavy_delay = (*it)->weight;
+                    Head->cargo_attached = (*it)->type;
+                    Head->forward = false;
+                    (*it)->Release();
+                    vBenefits.erase(it);
+                    break;
+                }
+            }
         }
 
 
-
-
+        //////////////////////////////////////////////////////////////////////////////////////////
 
 
 
@@ -970,7 +1063,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         Draw->DrawBitmap(bmpBase, D2D1::RectF(10.0f, (float)(clHeight / 2), 130.0f, (float)(clHeight / 2 + 61)));
         Draw->DrawBitmap(bmpPlatform, D2D1::RectF(0.0f, (float)(clHeight / 2 + 61), 150.0f, (float)(clHeight / 2 + 150)));
         if (Head && bmpHead)
-            if(Head->cargo_attached==types::no_type)
+            if(Head->forward)
                 Draw->DrawBitmap(bmpHead[Head->GetFrame()], D2D1::RectF(Head->x, Head->y, Head->ex, Head->ey));
             else
                 Draw->DrawBitmap(bmpHead[75], D2D1::RectF(Head->x, Head->y, Head->ex, Head->ey));
@@ -982,6 +1075,77 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         if (Target)
             Draw->DrawBitmap(bmpTarget, D2D1::RectF(Target->x, Target->y, Target->ex, Target->ey));
 
+        if (!vBenefits.empty())
+        {
+            for (int i = 0; i < vBenefits.size(); ++i)
+            {
+                switch (vBenefits[i]->type)
+                {
+                    case types::big_gold:
+                        Draw->DrawBitmap(bmpBigG, D2D1::RectF(vBenefits[i]->x, vBenefits[i]->y, vBenefits[i]->ex, vBenefits[i]->ey));
+                        break;
+
+                    case types::big_silver:
+                        Draw->DrawBitmap(bmpBigS, D2D1::RectF(vBenefits[i]->x, vBenefits[i]->y, vBenefits[i]->ex, vBenefits[i]->ey));
+                        break;
+
+                    case types::mid_gold:
+                        Draw->DrawBitmap(bmpMidG, D2D1::RectF(vBenefits[i]->x, vBenefits[i]->y, vBenefits[i]->ex, vBenefits[i]->ey));
+                        break;
+
+                    case types::mid_silver:
+                        Draw->DrawBitmap(bmpBigS, D2D1::RectF(vBenefits[i]->x, vBenefits[i]->y, vBenefits[i]->ex, vBenefits[i]->ey));
+                        break;
+
+                    case types::sm_gold:
+                        Draw->DrawBitmap(bmpSmallG, D2D1::RectF(vBenefits[i]->x, vBenefits[i]->y, vBenefits[i]->ex, vBenefits[i]->ey));
+                        break;
+
+                    case types::sm_silver:
+                        Draw->DrawBitmap(bmpSmallS, D2D1::RectF(vBenefits[i]->x, vBenefits[i]->y, vBenefits[i]->ex, vBenefits[i]->ey));
+                        break;
+
+                    case types::bag:
+                        Draw->DrawBitmap(bmpBag, D2D1::RectF(vBenefits[i]->x, vBenefits[i]->y, vBenefits[i]->ex, vBenefits[i]->ey));
+                        break;
+                }
+            }
+        }
+
+        if (Head && Head->cargo_attached != types::no_type)
+        {
+            switch (Head->cargo_attached)
+            {
+            case types::big_gold:
+                Draw->DrawBitmap(bmpBigG, D2D1::RectF(Head->ex, Head->y, Head->ex + 40.0f, Head->y + 37.0f));
+                break;
+
+            case types::big_silver:
+                Draw->DrawBitmap(bmpBigS, D2D1::RectF(Head->ex, Head->y, Head->ex + 40.0f, Head->y + 29.0f));
+                break;
+
+            case types::mid_gold:
+                Draw->DrawBitmap(bmpMidG, D2D1::RectF(Head->ex, Head->y, Head->ex + 30.0f, Head->y + 34.0f));
+                break;
+
+            case types::mid_silver:
+                Draw->DrawBitmap(bmpBigS, D2D1::RectF(Head->ex, Head->y, Head->ex + 30.0f, Head->y + 30.0f));
+                break;
+
+            case types::sm_gold:
+                Draw->DrawBitmap(bmpSmallG, D2D1::RectF(Head->ex, Head->y, Head->ex + 20.0f, Head->y + 32.0f));
+                break;
+
+            case types::sm_silver:
+                Draw->DrawBitmap(bmpSmallS, D2D1::RectF(Head->ex, Head->y, Head->ex + 20.0f, Head->y + 30.0f));
+                break;
+
+            case types::bag:
+                Draw->DrawBitmap(bmpBag, D2D1::RectF(Head->ex, Head->y, Head->ex + 30.0f, Head->y + 30.0f));
+                break;
+
+            }
+        }
 
 
         Draw->EndDraw();

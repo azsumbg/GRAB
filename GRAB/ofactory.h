@@ -58,7 +58,6 @@ class BENEFIT :public OBJECT
 {
 	public:
 		types type = types::no_type;
-		int bonus = -1;
 		int weight = 0;
 
 		BENEFIT(types __type, float _bx,float _by):OBJECT(_bx,_by,1.0f,1.0f)
@@ -69,43 +68,37 @@ class BENEFIT :public OBJECT
 			{
 				case types::big_gold:
 					SetNewDims(40.0f, 37.0f);
-					bonus = 20;
-					weight = 40;
+					weight = 10;
 					break;
 
 				case types::bag:
 					SetNewDims(30.0f, 30.0f);
-					weight = 10;
+					weight = 5;
 					break;
 
 				case types::big_silver:
 					SetNewDims(40.0f, 29.0f);
-					bonus = 15;
-					weight = 35;
+					weight = 7;
 					break;
 
 				case types::mid_gold:
 					SetNewDims(30.0f, 34.0f);
-					bonus = 25;
-					weight = 30;
+					weight = 6;
 					break;
 
 				case types::mid_silver:
 					SetNewDims(30.0f, 30.0f);
-					bonus = 18;
-					weight = 25;
+					weight = 5;
 					break;
 
 				case types::sm_gold:
 					SetNewDims(20.0f, 32.0f);
-					bonus = 35;
-					weight = 10;
+					weight = 4;
 					break;
 
 				case types::sm_silver:
 					SetNewDims(20.0f, 30.0f);
-					bonus = 35;
-					weight = 10;
+					weight = 4;
 					break;
 			}
 		}

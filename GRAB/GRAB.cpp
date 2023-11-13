@@ -71,11 +71,18 @@ bool b1_hglt = false;
 bool b2_hglt = false;
 bool b3_hglt = false;
 
+bool level_up = false;
+
 bool target_down = true;
 
 RECT but1Rect = { 0,0,0,0 };
 RECT but2Rect = { 0,0,0,0 };
 RECT but3Rect = { 0,0,0,0 };
+
+
+RECT store_timeRect = { 0,0,0,0 };
+RECT store_speedRect = { 0,0,0,0 };
+RECT store_exitRect = { 0,0,0,0 };
 
 POINT cur_pos = { 0,0 };
 UINT bTimer = -1;
@@ -97,6 +104,7 @@ ID2D1HwndRenderTarget* Draw = nullptr;
 
 ID2D1RadialGradientBrush* ButBckgBrush = nullptr;
 ID2D1SolidColorBrush* BackBrush = nullptr;
+ID2D1SolidColorBrush* LevelBackBrush = nullptr;
 ID2D1SolidColorBrush* TxtBrush = nullptr;
 ID2D1SolidColorBrush* HgltTxtBrush = nullptr;
 ID2D1SolidColorBrush* InactiveTxtBrush = nullptr;
@@ -148,6 +156,7 @@ void ReleaseCOM()
     SafeRelease(&TxtBrush);
     SafeRelease(&HgltTxtBrush);
     SafeRelease(&InactiveTxtBrush);
+    SafeRelease(&LevelBackBrush);
     SafeRelease(&iWriteFactory);
     SafeRelease(&nrmTextFormat);
     SafeRelease(&bigTextFormat);
@@ -176,6 +185,7 @@ void InitGame()
     wcscpy_s(current_player, L"BAGERIST");
     name_size = 9;
     set_name = false;
+    level_up = false;
     
     score = 0;
     level = 1;
@@ -315,6 +325,10 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
                 but1Rect = { 0,0,200,50 };
                 but2Rect = { 275,0,475,50 };
                 but3Rect = { 550,0,800,50 };
+
+                store_timeRect = { 360, 250, 500, 350 };
+                store_speedRect = { 360, 360, 500, 450 };
+                store_exitRect = { 450, 450, 600, 500 };
 
                 srand((unsigned int)time(0));
                 SetTimer(hwnd, bTimer, 1000, NULL);
@@ -474,9 +488,69 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
             break;
 
         case WM_TIMER:
-            if (pause)break;
+            if (pause || level_up)break;
             minutes = (int)(floor(seconds / 60));
             seconds--;
+            if (seconds < 0)
+            {
+                if (sound)mciSendString(L"play .\\res\\snd\\levelup.wav", NULL, NULL, NULL);
+                pause = true;
+                level_up = true;
+
+                level++;
+                seconds = 90 - 2 * level;
+                max_benefits_for_level = 11 - level;
+                target_points = 50 + 10 * level;
+               
+                vChain.clear();
+                
+                if (Target)
+                {
+                    Target->Release();
+                    Target = nullptr;
+                }
+
+                Target = new OBJECT(static_cast<float>(clWidth - 50), 50.0f, 40.0f, 46.0f);
+
+                vBenefits.clear();
+
+                for (int i = 0; i <= max_benefits_for_level; ++i)
+                {
+                    bool end_init = true;
+
+                    while (end_init)
+                    {
+                        float tx = 0;
+                        float ty = 0;
+                        int ttype = -1;
+                        bool problem = false;
+
+                        ttype = rand() % 7;
+
+                        tx = (float)(rand() % 755 + 200);
+                        ty = (float)(rand() % 480 + 50);
+
+
+                        if (!vBenefits.empty())
+                        {
+                            for (int j = 0; j < vBenefits.size(); j++)
+                            {
+                                if (tx >= vBenefits[j]->x && tx <= vBenefits[j]->ex + 40.0f && ty >= vBenefits[j]->y && ty <= vBenefits[j]->ey)
+                                {
+                                    problem = true;
+                                    break;
+                                }
+                            }
+
+                        }
+                        if (!problem)
+                        {
+                            vBenefits.push_back(iCreate(static_cast<types>(ttype), tx, ty));
+                            end_init = false;
+                        }
+                    }
+                }
+            }
             break;
 
         case WM_COMMAND:
@@ -504,6 +578,57 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
             break;
 
         case WM_LBUTTONDOWN:
+
+            if (level_up)
+            {
+                if (LOWORD(lParam) >= store_timeRect.left && LOWORD(lParam) <= store_timeRect.right
+                    && HIWORD(lParam) >= store_timeRect.top && HIWORD(lParam) <= store_timeRect.bottom)
+                {
+                    if (score < 75)
+                    {
+                        if (sound)mciSendString(L"play .\\res\\snd\\negative.wav", NULL, NULL, NULL);
+                        break;
+                    }
+                    else
+                    {
+                        if (sound)mciSendString(L"play .\\res\\snd\\select.wav", NULL, NULL, NULL);
+                        score -= 75;
+                        seconds = 120 - 2 * level;
+                        pause = false;
+                        level_up = false;
+                        break;
+                    }
+                }
+
+                if (LOWORD(lParam) >= store_speedRect.left && LOWORD(lParam) <= store_speedRect.right
+                    && HIWORD(lParam) >= store_speedRect.top && HIWORD(lParam) <= store_speedRect.bottom)
+                {
+                    if (score < 50)
+                    {
+                        if (sound)mciSendString(L"play .\\res\\snd\\negative.wav", NULL, NULL, NULL);
+                        break;
+                    }
+                    else
+                    {
+                        if (sound)mciSendString(L"play .\\res\\snd\\select.wav", NULL, NULL, NULL);
+                        max_benefits_for_level += 3;
+                        score -= 50;
+                        pause = false;
+                        level_up = false;
+                        break;
+                    }
+                }
+
+                if (LOWORD(lParam) >= store_exitRect.left && LOWORD(lParam) <= store_exitRect.right
+                    && HIWORD(lParam) >= store_exitRect.top && HIWORD(lParam) <= store_exitRect.bottom)
+                {
+                    if (sound)mciSendString(L"play .\\res\\snd\\select.wav", NULL, NULL, NULL);
+                    pause = false;
+                    level_up = false;
+                    break;
+                }
+            }
+
             if (LOWORD(lParam) >= but1Rect.left && LOWORD(lParam) <= but1Rect.right
                 && HIWORD(lParam) >= but1Rect.top && HIWORD(lParam) <= but1Rect.bottom)
             {
@@ -709,6 +834,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         log.close();
         ErrExit(eD2D);
     }
+
+    hr = Draw->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::DarkViolet), &LevelBackBrush);
+    if (hr != S_OK)
+    {
+        std::wofstream log(L".\\res\\data\\log.err", std::ios::app);
+        log << L"Error creating D2D1 SolidColorBrush !" << std::endl;
+        log.close();
+        ErrExit(eD2D);
+    }
     ///////////////////////////////////////////////////////////////////////
 
     //WRITE FACTORY AND TEXT **********************************************
@@ -886,6 +1020,21 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         if (pause)
         {
             if (show_help)continue;
+
+            if (level_up)
+            {
+                Draw->BeginDraw();
+                Draw->FillRectangle(D2D1::RectF(350.0f, 150.0f, 600.0f, 500.0f), LevelBackBrush);
+                Draw->DrawText(L"НИВОТО ПРЕМИНАТО !\n         МАГАЗИН", 38, nrmTextFormat,
+                    D2D1::RectF(380.0f, 155.0f, 600.0f, 300.0f), TxtBrush);
+                Draw->DrawText(L"ВРЕМЕ - 75", 11, nrmTextFormat, D2D1::RectF(360.0f, 250.0f, 500.0f, 350.0f), TxtBrush);
+                Draw->DrawText(L"БРОЙ КЮЛЧЕТА - 50", 18, nrmTextFormat, D2D1::RectF(360.0f, 360.0f, 500.0f, 450.0f), TxtBrush);
+                Draw->DrawText(L"ИЗХОД", 6, nrmTextFormat, D2D1::RectF(450.0f, 450.0f, 600.0f, 500.0f), TxtBrush);
+                Draw->EndDraw();
+                continue;
+            }
+
+
             Draw->BeginDraw();
             if (BackBrush)
                 Draw->FillRectangle(D2D1::RectF(0.0f, 50.0f, 150.0f, (float)(clHeight)), BackBrush);
@@ -1168,31 +1317,31 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             switch (Head->cargo_attached)
             {
             case types::big_gold:
-                Draw->DrawBitmap(bmpBigG, D2D1::RectF(Head->ex, Head->y, Head->ex + 40.0f, Head->y + 37.0f));
+                Draw->DrawBitmap(bmpBigG, D2D1::RectF(Head->ex - 5.0f, Head->y + 10.0f, Head->ex + 35.0f, Head->y + 47.0f));
                 break;
 
             case types::big_silver:
-                Draw->DrawBitmap(bmpBigS, D2D1::RectF(Head->ex, Head->y, Head->ex + 40.0f, Head->y + 29.0f));
+                Draw->DrawBitmap(bmpBigS, D2D1::RectF(Head->ex - 5.0f, Head->y + 10.0f, Head->ex + 35.0f, Head->y + 39.0f));
                 break;
 
             case types::mid_gold:
-                Draw->DrawBitmap(bmpMidG, D2D1::RectF(Head->ex, Head->y, Head->ex + 30.0f, Head->y + 34.0f));
+                Draw->DrawBitmap(bmpMidG, D2D1::RectF(Head->ex - 5.0f, Head->y + 10.0f, Head->ex + 25.0f, Head->y + 44.0f));
                 break;
 
             case types::mid_silver:
-                Draw->DrawBitmap(bmpBigS, D2D1::RectF(Head->ex, Head->y, Head->ex + 30.0f, Head->y + 30.0f));
+                Draw->DrawBitmap(bmpBigS, D2D1::RectF(Head->ex - 5.0f, Head->y + 10.0f, Head->ex + 25.0f, Head->y + 40.0f));
                 break;
 
             case types::sm_gold:
-                Draw->DrawBitmap(bmpSmallG, D2D1::RectF(Head->ex, Head->y, Head->ex + 20.0f, Head->y + 32.0f));
+                Draw->DrawBitmap(bmpSmallG, D2D1::RectF(Head->ex - 5.0f, Head->y + 10.0f, Head->ex + 15.0f, Head->y + 42.0f));
                 break;
 
             case types::sm_silver:
-                Draw->DrawBitmap(bmpSmallS, D2D1::RectF(Head->ex, Head->y, Head->ex + 20.0f, Head->y + 30.0f));
+                Draw->DrawBitmap(bmpSmallS, D2D1::RectF(Head->ex - 5.0f, Head->y + 10.0f, Head->ex + 15.0f, Head->y + 40.0f));
                 break;
 
             case types::bag:
-                Draw->DrawBitmap(bmpBag, D2D1::RectF(Head->ex, Head->y, Head->ex + 30.0f, Head->y + 30.0f));
+                Draw->DrawBitmap(bmpBag, D2D1::RectF(Head->ex - 5.0f, Head->y + 10.0f, Head->ex + 25.0f, Head->y + 40.0f));
                 break;
 
             }
@@ -1221,6 +1370,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         wcscpy_s(status, L"нужни: ");
         wsprintf(add, L"%d", target_points);
+        wcscat_s(status, add);
+
+        wcscat_s(status, L"\n\nниво: ");
+        wsprintf(add, L"%d", level);
         wcscat_s(status, add);
 
         text_size = 0;

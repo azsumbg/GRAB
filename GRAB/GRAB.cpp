@@ -1,16 +1,16 @@
+#include "D2BMPLOADER.h"
+#include "ErrH.h"
+#include "FCheck.h"
 #include "framework.h"
 #include "GRAB.h"
+#include "ofactory.h"
 #include "resource.h"
 #include <ctime>
-#include <mmsystem.h>
 #include <d2d1.h>
 #include <dwrite.h>
-#include <vector>
 #include <fstream>
-#include "ErrH.h"
-#include "D2BMPLOADER.h"
-#include "FCheck.h"
-#include "ofactory.h"
+#include <mmsystem.h>
+#include <vector>
 
 #pragma comment(lib, "winmm.lib")
 #pragma comment(lib, "d2d1.lib")
@@ -190,16 +190,11 @@ void InitGame()
     score = 0;
     level = 1;
     seconds = 90 - 2 * level;
+    minutes = (int)(floor(seconds / 60));
     max_benefits_for_level = 11 - level;
     target_points = 50 + 10 * level;
     
     if (max_benefits_for_level < 6)max_benefits_for_level = 6;
-
-    if (Head)
-    {
-        Head->Release();
-        Head = nullptr;
-    }
 
     Head = new HEAD(150.0f, (float)(clHeight / 2));
     vChain.clear();
@@ -212,6 +207,11 @@ void InitGame()
 
     Target = new OBJECT(static_cast<float>(clWidth - 50), 50.0f, 40.0f, 46.0f);
 
+    if (!vBenefits.empty())
+    {
+        for (int i = 0; i < vBenefits.size(); ++i) vBenefits[i]->Release();
+    }
+   
     vBenefits.clear();
 
     for (int i = 0; i <= max_benefits_for_level; ++i)
@@ -260,17 +260,240 @@ void ErrExit(int which_error)
     ReleaseCOM();
     exit(1);
 }
+BOOL CheckRecord()
+{
+    if (score < 1)return no_record;
 
+    int result = -1;
+    CheckFile(record_file, &result);
+
+    if (result == FILE_NOT_EXIST)
+    {
+        std::wofstream rec(record_file);
+        rec << score << std::endl;
+        for (int i = 0; i < 16; ++i)rec << static_cast<int>(current_player[i]) << std::endl;
+        rec.close();
+        return first_record;
+    }
+
+    std::wfstream check(record_file);
+    int svd = 0;
+    check >> svd;
+    check.close();
+
+    if (score > svd)
+    {
+        std::wofstream rec(record_file);
+        rec << score << std::endl;
+        for (int i = 0; i < 16; ++i)rec << static_cast<int>(current_player[i]) << std::endl;
+        rec.close();
+        return record;
+    }
+    return no_record;
+}
 void GameOver()
 {
     PlaySound(NULL, NULL, NULL);
     KillTimer(bHwnd, bTimer);
 
+    wchar_t final_text[100] = L"\0";
+    int final_size = 0;
+    
 
-   
+    switch (CheckRecord())
+    {
+        case no_record:
+            if (sound)PlaySound(L".\\res\\snd\\loose.wav", NULL, SND_ASYNC);
+            wcscpy_s(final_text, L"ИГРАТА СВЪРШИ !");
+            break;
+
+        case first_record:
+            if (sound)PlaySound(L".\\res\\snd\\record.wav", NULL, SND_ASYNC);
+            wcscpy_s(final_text, L"ПЪРВИ РЕКОРД !");
+            break;
+
+        case record:
+            if (sound)PlaySound(L".\\res\\snd\\record.wav", NULL, SND_ASYNC);
+            wcscpy_s(final_text, L"НОВ СВЕТОВЕН РЕКОРД !");
+            break;
+    }
+
+    for (int i = 0; i < 100; i++)
+    {
+        if (final_text[i] != '\0')final_size++;
+        else break;
+    }
+    
+    Draw->BeginDraw();
+    Draw->Clear(D2D1::ColorF(D2D1::ColorF::DarkViolet));
+    Draw->DrawText(final_text, final_size, bigTextFormat, D2D1::RectF(100.0f, (float)(clHeight / 2 - 50), (float)(clWidth), (float)(clHeight)),
+        TxtBrush);
+    Draw->EndDraw();
+    Sleep(6500);
     std::remove(temp_file);
     bMsg.message = WM_QUIT;
     bMsg.wParam = 0;
+}
+void HallOfFame()
+{
+    int result = 0;
+    CheckFile(record_file, &result);
+
+    if (result == FILE_NOT_EXIST)
+    {
+        if (sound)MessageBeep(MB_ICONEXCLAMATION);
+        MessageBox(bHwnd, L"Липсва рекорд на играта !\n\nПостарай се повече !", L"Липсва файл !", MB_OK | MB_ICONEXCLAMATION);
+        return;
+    }
+
+    wchar_t a_text[100] = L"Най-добър играч: ";
+    wchar_t svd_pl[16] = L"\0";
+    wchar_t add[5] = L"\0";
+
+    int svd_score = 0;
+    int text_size = 0;
+
+    std::wifstream rec(record_file);
+
+    rec >> svd_score;
+    wsprintf(add, L"%d", svd_score);
+    
+    for (int i = 0; i < 16; i++)
+    {
+        int a_letter = 0;
+        rec >> a_letter;
+        svd_pl[i] = static_cast<wchar_t>(a_letter);
+    }
+
+    wcscat_s(a_text, svd_pl);
+    wcscat_s(a_text, L" !\nрекорд: ");
+    wcscat_s(a_text, add);
+
+    for (int i = 0; i < 100; i++)
+    {
+        if (a_text[i] != '\0')text_size++;
+        else break;
+    }
+
+    if (sound)mciSendString(L"play .\\res\\snd\\tada.wav", NULL, NULL, NULL);
+
+    Draw->BeginDraw();
+    Draw->Clear(D2D1::ColorF(D2D1::ColorF::DarkViolet));
+    Draw->DrawText(a_text, text_size, bigTextFormat, D2D1::RectF(50.0f, (float)(clHeight / 2 - 50), (float)(clWidth), (float)(clHeight)),
+        TxtBrush);
+    Draw->EndDraw();
+    Sleep(3000);
+}
+void SaveGame()
+{
+    int result = -1;
+    CheckFile(save_file, &result);
+    if (result == FILE_EXIST)
+    {
+        if (sound)MessageBeep(MB_ICONEXCLAMATION);
+        if (MessageBox(bHwnd, L"Има записана игра, която ще загубиш !\n\nПрезаписваш ли я ?", L"Презапис !",
+            MB_YESNO | MB_ICONQUESTION) == IDNO)return;
+    }
+
+    std::wofstream save(save_file);
+
+    save << score << std::endl;
+    for (int i = 0; i < 16; i++)save << static_cast<int>(current_player[i]) << std::endl;
+    save << level << std::endl;
+    save << name_size << std::endl;
+    save << set_name << std::endl;
+    save << level_up << std::endl;
+    save << seconds << std::endl;
+    save << max_benefits_for_level << std::endl;
+    save << target_points << std::endl;
+
+    save << vBenefits.size() << std::endl;
+    for (int i = 0; i < vBenefits.size(); i++)
+    {
+        save << static_cast<int>(vBenefits[i]->type) << std::endl;
+        save << vBenefits[i]->x << std::endl;
+        save << vBenefits[i]->y << std::endl;
+    }
+
+    save.close();
+
+    if (sound)mciSendString(L"play .\\res\\snd\\save.wav", NULL, NULL, NULL);
+    MessageBox(bHwnd, L"Играта е записана !", L"Съхранение !", MB_OK | MB_ICONEXCLAMATION);
+}
+void LoadGame()
+{
+    int result = -1;
+    CheckFile(save_file, &result);
+    if (result == FILE_EXIST)
+    {
+        if (sound)MessageBeep(MB_ICONEXCLAMATION);
+        if (MessageBox(bHwnd, L"Настоящата игра ще бъде загубена !\n\nПрезаписваш ли я ?", L"Презапис !",
+            MB_YESNO | MB_ICONQUESTION) == IDNO)return;
+    }
+    else
+    {
+        if (sound)MessageBeep(MB_ICONEXCLAMATION);
+        MessageBox(bHwnd, L"Липсва записана игра !\n\nПостарай се повече !", L"Липсва файл !", MB_OK | MB_ICONEXCLAMATION);
+        return;
+    }
+
+    vChain.clear();
+
+    if (Target)
+    {
+        Target->Release();
+        Target = nullptr;
+    }
+
+    Target = new OBJECT(static_cast<float>(clWidth - 50), 50.0f, 40.0f, 46.0f);
+
+    if (!vBenefits.empty())
+    {
+        for (int i = 0; i < vBenefits.size(); ++i) vBenefits[i]->Release();
+    }
+
+    vBenefits.clear();
+
+    std::wifstream save(save_file);
+
+    save >> score;
+    for (int i = 0; i < 16; i++)
+    {
+        int letter = 0;
+
+        save >> letter;
+        current_player[i]=static_cast<wchar_t>(letter);
+    
+    }
+    save >> level;
+    save >> name_size;
+    save >> set_name;
+    save >> level_up;
+    save >> seconds;
+    save >> max_benefits_for_level;
+    save >> target_points;
+
+    save >> result;
+
+    if (result > 0)
+    {
+        for (int i = 0; i < result; i++)
+        {
+            int ttype = -1;
+            float tx = 0;
+            float ty = 0;
+            
+            save >> ttype;
+            save >> tx;
+            save >> ty;
+
+            vBenefits.push_back(iCreate(static_cast<types>(ttype), tx, ty));
+        }
+    }
+    save.close();
+
+    if (sound)mciSendString(L"play .\\res\\snd\\save.wav", NULL, NULL, NULL);
+    MessageBox(bHwnd, L"Играта е заредена !", L"Съхранение !", MB_OK | MB_ICONEXCLAMATION);
 }
 
 INT_PTR CALLBACK DlgProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lParam)
@@ -489,10 +712,12 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
 
         case WM_TIMER:
             if (pause || level_up)break;
-            minutes = (int)(floor(seconds / 60));
             seconds--;
+            minutes = (int)(floor(seconds / 60));
             if (seconds < 0)
             {
+                if (score < target_points)GameOver();
+
                 if (sound)mciSendString(L"play .\\res\\snd\\levelup.wav", NULL, NULL, NULL);
                 pause = true;
                 level_up = true;
@@ -512,6 +737,10 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
 
                 Target = new OBJECT(static_cast<float>(clWidth - 50), 50.0f, 40.0f, 46.0f);
 
+                if (!vBenefits.empty())
+                {
+                    for (int i = 0; i < vBenefits.size(); ++i) vBenefits[i]->Release();
+                }
                 vBenefits.clear();
 
                 for (int i = 0; i <= max_benefits_for_level; ++i)
@@ -573,6 +802,23 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
                     SendMessage(hwnd, WM_CLOSE, NULL, NULL);
                     break;
 
+                case mSave:
+                    pause = true;
+                    SaveGame();
+                    pause = false;
+                    break;
+
+                case mLoad:
+                    pause = true;
+                    LoadGame();
+                    pause = false;
+                    break;
+
+                case mHoF:
+                    pause = true;
+                    HallOfFame();
+                    pause = false;
+                    break;
 
             }
             break;
@@ -722,6 +968,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         NULL, NULL, bIns, NULL);
     if (!bHwnd)ErrExit(eWindow);
     else ShowWindow(bHwnd, SW_SHOWDEFAULT);
+    
+    PlaySound(sound_file, NULL, SND_ASYNC | SND_LOOP);
     /////////////////////////////////////////////////////////////
 
     HRESULT hr = S_OK;
@@ -1002,8 +1250,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             ErrExit(eD2D);
         }
     }
-
-    
     //////////////////////////////////////////////////////////////////////
 
     //MAIN LOOP *******************************************************
@@ -1137,30 +1383,59 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                     switch (Head->cargo_attached)
                     {
                         case types::big_gold:
+                            if (sound)mciSendString(L"play .\\res\\snd\\yeah.wav", NULL, NULL, NULL);
                             score += 35;
                             break;
 
                         case types::big_silver:
+                            if (sound)mciSendString(L"play .\\res\\snd\\yeah.wav", NULL, NULL, NULL);
                             score += 25;
                             break; 
 
                         case types::mid_gold:
+                            if (sound)mciSendString(L"play .\\res\\snd\\yeah.wav", NULL, NULL, NULL);
                             score += 30;
                             break;
 
                         case types::mid_silver:
+                            if (sound)mciSendString(L"play .\\res\\snd\\yeah.wav", NULL, NULL, NULL);
                             score += 20;
                             break;
 
                         case types::sm_gold:
+                            if (sound)mciSendString(L"play .\\res\\snd\\yeah.wav", NULL, NULL, NULL);
                             score += 15;
                             break;
 
                         case types::sm_silver:
+                            if (sound)mciSendString(L"play .\\res\\snd\\yeah.wav", NULL, NULL, NULL);
                             score += 10;
                             break;
 
                         case types::bag:
+                            switch (rand() % 4)
+                            {
+                                case 0:
+                                    if (sound)mciSendString(L"play .\\res\\snd\\yeah.wav", NULL, NULL, NULL);
+                                    score += 20;
+                                    break;
+
+                                case 1:
+                                    if (sound)mciSendString(L"play .\\res\\snd\\ouch.wav", NULL, NULL, NULL);
+                                    score -= 20;
+                                    break;
+
+                                case 2:
+                                    if (sound)mciSendString(L"play .\\res\\snd\\yeah.wav", NULL, NULL, NULL);
+                                    seconds += 10;
+                                    break;
+
+                                case 3:
+                                    if (sound)mciSendString(L"play .\\res\\snd\\ouch.wav", NULL, NULL, NULL);
+                                    seconds -= 10;
+                                    break;
+                            }
+                            
                             break;
                     }
 
@@ -1213,12 +1488,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         }
 
         //////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-
-
-
 
         //DRAW THINGS *************************************************
 
@@ -1404,10 +1673,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         if (nrmTextFormat && RedTxtBrush)
             Draw->DrawText(status, text_size, nrmTextFormat, D2D1::RectF(50.0f, 520.0f, 150.0f, 600.0f), RedTxtBrush);
-
-
         Draw->EndDraw();
-
     }
     /////////////////////////////////////////////////////////////////////
 

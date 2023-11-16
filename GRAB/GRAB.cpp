@@ -495,6 +495,71 @@ void LoadGame()
     if (sound)mciSendString(L"play .\\res\\snd\\save.wav", NULL, NULL, NULL);
     MessageBox(bHwnd, L"Играта е заредена !", L"Съхранение !", MB_OK | MB_ICONEXCLAMATION);
 }
+void ShowHelp()
+{
+    int result = -1;
+    CheckFile(help_file, &result);
+
+    if (result == FILE_NOT_EXIST)
+    {
+        if (sound)MessageBeep(MB_ICONERROR);
+        MessageBox(bHwnd, L"Липсва помощ за играта !\n\nсвържете се с разработчика !", L"Липсва файл !", MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    wchar_t help_txt[1000] = L"\0";
+
+    std::wifstream help(help_file);
+    help >> result;
+    for (int i = 0; i < result; ++i)
+    {
+        int letter = 0;
+        help >> letter;
+        help_txt[i] = static_cast<wchar_t>(letter);
+    }
+
+    Draw->BeginDraw();
+    if (BackBrush)
+        Draw->FillRectangle(D2D1::RectF(0.0f, 50.0f, 150.0f, (float)(clHeight)), BackBrush);
+    if (ButBckgBrush)
+        Draw->FillRectangle(D2D1::RectF(0.0f, 0.0f, (float)(clWidth), 50.0f), ButBckgBrush);
+    if (nrmTextFormat && TxtBrush)
+    {
+        if (set_name && InactiveTxtBrush)
+            Draw->DrawText(L"Име на играч", 13, nrmTextFormat, D2D1::RectF(20.0f, 0.0f, (float)(but1Rect.right), 50.0f),
+                InactiveTxtBrush);
+        if (!b1_hglt)
+        {
+            if (!set_name)
+                Draw->DrawText(L"Име на играч", 13, nrmTextFormat, D2D1::RectF(20.0f, 0.0f, (float)(but1Rect.right), 50.0f),
+                    TxtBrush);
+        }
+        else
+        {
+            if (!set_name)
+                Draw->DrawText(L"Име на играч", 13, nrmTextFormat, D2D1::RectF(20.0f, 0.0f, (float)(but1Rect.right), 50.0f),
+                    HgltTxtBrush);
+        }
+        if (!b2_hglt)
+            Draw->DrawText(L"Звуци ON / OFF", 15, nrmTextFormat,
+                D2D1::RectF((float)(but2Rect.left + 10.0f), 0.0f, (float)(but2Rect.right), 50.0f), TxtBrush);
+        else
+            Draw->DrawText(L"Звуци ON / OFF", 15, nrmTextFormat,
+                D2D1::RectF((float)(but2Rect.left + 10.0f), 0.0f, (float)(but2Rect.right), 50.0f), HgltTxtBrush);
+        if (!b3_hglt)
+            Draw->DrawText(L"Помощ за играта", 16, nrmTextFormat,
+                D2D1::RectF((float)(but3Rect.left + 10.0f), 0.0f, (float)(but3Rect.right)), TxtBrush);
+        else
+            Draw->DrawText(L"Помощ за играта", 16, nrmTextFormat,
+                D2D1::RectF((float)(but3Rect.left + 10.0f), 0.0f, (float)(but3Rect.right)), HgltTxtBrush);
+    }
+    if (RedTxtBrush)
+        Draw->FillRectangle(D2D1::RectF(0, 50.0f, (float)(clWidth), (float)(clHeight)), RedTxtBrush);
+    if (nrmTextFormat && TxtBrush)
+        Draw->DrawText(help_txt, result, nrmTextFormat, D2D1::RectF(100.0f, 70.0f, (float)(clWidth), (float)(clHeight)),
+            TxtBrush);
+    Draw->EndDraw();
+}
 
 INT_PTR CALLBACK DlgProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -906,8 +971,19 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
             else if (LOWORD(lParam) >= but3Rect.left && LOWORD(lParam) <= but3Rect.right
                 && HIWORD(lParam) >= but3Rect.top && HIWORD(lParam) <= but3Rect.bottom)
             {
-                
-                break;
+                if (!show_help)
+                {
+                    show_help = true;
+                    pause = true;
+                    ShowHelp();
+                    break;
+                }
+                else
+                {
+                    show_help = false;
+                    pause = false;
+                    break;
+                }
             }
             else
             {
@@ -1252,6 +1328,25 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     }
     //////////////////////////////////////////////////////////////////////
 
+    wchar_t first_text[32] = L"АЛЧЕН БАГЕРИСТ !\n\ndev. Daniel";
+    wchar_t text_to_show[32] = L"\0";
+    int fsize = 0;
+
+    for (int i = 0; i < 32; ++i)
+    {
+        Draw->BeginDraw();
+        Draw->Clear(D2D1::ColorF(D2D1::ColorF::Red));
+        text_to_show[i] = first_text[i];
+        mciSendString(L"play .\\res\\snd\\click.wav", NULL, NULL, NULL);
+        if (bigTextFormat && TxtBrush)
+            Draw->DrawText(text_to_show, fsize, bigTextFormat, D2D1::RectF(150.0f, 150.0f, (float)(clWidth), (float)clHeight), TxtBrush);
+        fsize++;
+        Draw->EndDraw();
+        Sleep(50);
+    }
+    Sleep(3000);
+    
+    
     //MAIN LOOP *******************************************************
     
     while (bMsg.message != WM_QUIT)
